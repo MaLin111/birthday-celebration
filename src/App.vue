@@ -1,176 +1,365 @@
 <template>
-  <div class="birthday-container">
-    <!-- 背景粒子效果 -->
-    <div class="particles">
-      <div v-for="i in 50" :key="i" class="particle" :style="getParticleStyle(i)"></div>
-    </div>
+  <div class="birthday-page">
+    <!-- Canvas 粒子背景 -->
+    <canvas ref="canvasRef" class="particle-canvas"></canvas>
 
     <!-- 主内容 -->
-    <div class="content">
-      <!-- 标题 -->
-      <h1 class="title">
-        <span v-for="(char, index) in titleText" :key="index" class="char" :style="{ animationDelay: `${index * 0.1}s` }">
-          {{ char }}
-        </span>
-      </h1>
-
-      <!-- 副标题 -->
-      <div class="subtitle">
-        <span class="glow-text">{{ currentYear }}</span>
-      </div>
-
-      <!-- 装饰线条 -->
-      <div class="lines">
-        <div class="line line-1"></div>
-        <div class="line line-2"></div>
-      </div>
-
-      <!-- 蛋糕图标 -->
-      <div class="cake-icon">🎂</div>
-
-      <!-- 祝福语 -->
-      <p class="message">
-        <span v-for="(char, index) in messageText" :key="index" class="message-char" :style="{ animationDelay: `${1 + index * 0.05}s` }">
-          {{ char === ' ' ? ' ' : char }}
-        </span>
-      </p>
-
-      <!-- 按钮 -->
-      <button class="celebrate-btn" @click="celebrate">
-        <span class="btn-text">点击庆祝</span>
-        <span class="btn-glow"></span>
-      </button>
+    <div class="main-content" :class="{ 'show': showContent }">
+      <h1 class="title">Happy Birthday</h1>
+      <div class="name">W_JK</div>
+      <p class="message">愿你的每一天都充满惊喜与欢乐</p>
     </div>
 
-    <!-- 烟花效果 -->
-    <div class="fireworks" v-if="showFireworks">
-      <div v-for="i in 20" :key="i" class="firework" :style="getFireworkStyle(i)"></div>
+    <!-- 祝福语 -->
+    <div class="blessing-message" :class="{ 'show': showBlessing }">
+      愿你的每一天都充满惊喜与欢乐
     </div>
-
-    <!-- 扫描线效果 -->
-    <div class="scanline"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
-const titleText = '生日快乐'
-const messageText = '愿你的每一天都充满惊喜与欢乐'
-const currentYear = new Date().getFullYear()
-const showFireworks = ref(false)
+const canvasRef = ref(null)
+const showContent = ref(false)
+const showBlessing = ref(false)
+let animationId = null
+let particles = []
+let startTime = null
 
-const getParticleStyle = (index) => {
-  const size = Math.random() * 4 + 1
-  const duration = Math.random() * 20 + 10
-  const delay = Math.random() * 5
-  const left = Math.random() * 100
+class Particle {
+  constructor(x, y, targetX, targetY, color) {
+    // 初始位置（随机分散）
+    const angle = Math.random() * Math.PI * 2
+    const radius = 200 + Math.random() * 300
+    this.x = x + Math.cos(angle) * radius
+    this.y = y + Math.sin(angle) * radius
 
-  return {
-    width: `${size}px`,
-    height: `${size}px`,
-    left: `${left}%`,
-    animationDuration: `${duration}s`,
-    animationDelay: `${delay}s`
+    // 目标位置
+    this.targetX = targetX
+    this.targetY = targetY
+
+    // 速度
+    this.vx = (Math.random() - 0.5) * 4
+    this.vy = (Math.random() - 0.5) * 4
+
+    // 颜色
+    this.color = color
+
+    // 大小
+    this.size = 2 + Math.random() * 2
+
+    // 透明度
+    this.alpha = 0.8
+
+    // 是否到达目标
+    this.arrived = false
+
+    // 是否开始聚合
+    this.startGathering = false
+
+    // 随机运动的角度和速度
+    this.randomAngle = Math.random() * Math.PI * 2
+    this.randomSpeed = 1 + Math.random() * 2
+  }
+
+  startGather() {
+    this.startGathering = true
+  }
+
+  update() {
+    if (!this.startGathering) {
+      // 初始2秒：无序运动
+      this.randomAngle += (Math.random() - 0.5) * 0.1
+      this.x += Math.cos(this.randomAngle) * this.randomSpeed
+      this.y += Math.sin(this.randomAngle) * this.randomSpeed
+
+      // 边界反弹
+      if (this.x < 0 || this.x > window.innerWidth) {
+        this.randomAngle = Math.PI - this.randomAngle
+      }
+      if (this.y < 0 || this.y > window.innerHeight) {
+        this.randomAngle = -this.randomAngle
+      }
+
+      // 透明度轻微变化
+      this.alpha = 0.6 + Math.sin(Date.now() * 0.003 + this.x) * 0.3
+    } else if (!this.arrived) {
+      // 聚合阶段
+      // 计算到目标的距离
+      const dx = this.targetX - this.x
+      const dy = this.targetY - this.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+
+      if (distance < 1) {
+        this.arrived = true
+        this.alpha = 1
+      } else {
+        // 使用缓动效果（减慢速度）
+        const ease = 0.03
+        this.vx += dx * ease * 0.05
+        this.vy += dy * ease * 0.05
+
+        // 添加阻尼
+        this.vx *= 0.92
+        this.vy *= 0.92
+
+        this.x += this.vx
+        this.y += this.vy
+
+        // 逐渐显示（减慢透明度变化）
+        this.alpha = Math.min(1, this.alpha + 0.01)
+      }
+    } else {
+      // 到达后轻微漂浮，带透明度变化（减小漂浮幅度）
+      const time = Date.now() * 0.0005
+      this.y += Math.sin(time + this.x * 0.01) * 0.1
+
+      // 透明度轻微变化
+      this.alpha = 0.8 + Math.sin(time + this.x * 0.02) * 0.2
+    }
+  }
+
+  draw(ctx) {
+    ctx.save()
+    ctx.globalAlpha = this.alpha
+    ctx.fillStyle = this.color
+    ctx.beginPath()
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
   }
 }
 
-const getFireworkStyle = (index) => {
-  const left = Math.random() * 100
-  const top = Math.random() * 100
-  const delay = Math.random() * 0.5
+const createTextParticles = (canvas, text, x, y, fontSize, color) => {
+  const ctx = canvas.getContext('2d')
+  ctx.font = `bold ${fontSize}px 'Varela Round', 'HarmonyOS Sans', sans-serif`
+  ctx.fillStyle = '#000'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
 
-  return {
-    left: `${left}%`,
-    top: `${top}%`,
-    animationDelay: `${delay}s`
+  // 绘制文字到临时 canvas
+  const tempCanvas = document.createElement('canvas')
+  const tempCtx = tempCanvas.getContext('2d')
+  const metrics = ctx.measureText(text)
+  const textWidth = metrics.width
+  const textHeight = fontSize
+
+  tempCanvas.width = textWidth + 20
+  tempCanvas.height = textHeight + 20
+
+  tempCtx.font = ctx.font
+  tempCtx.fillStyle = '#000'
+  tempCtx.textAlign = 'center'
+  tempCtx.textBaseline = 'middle'
+  tempCtx.fillText(text, tempCanvas.width / 2, tempCanvas.height / 2)
+
+  // 获取像素数据
+  const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height)
+  const pixels = imageData.data
+
+  const centerX = canvas.width / 2
+  const centerY = canvas.height / 2
+
+  const particleArray = []
+  const gap = 3 // 粒子间隔
+
+  for (let py = 0; py < tempCanvas.height; py += gap) {
+    for (let px = 0; px < tempCanvas.width; px += gap) {
+      const index = (py * tempCanvas.width + px) * 4
+      const alpha = pixels[index + 3]
+
+      if (alpha > 128) {
+        const targetX = x + px - tempCanvas.width / 2
+        const targetY = y + py - tempCanvas.height / 2
+        particleArray.push(new Particle(centerX, centerY, targetX, targetY, color))
+      }
+    }
   }
+
+  return particleArray
 }
 
-const celebrate = () => {
-  showFireworks.value = true
-  setTimeout(() => {
-    showFireworks.value = false
-  }, 3000)
+const initParticles = (canvas) => {
+  const centerX = canvas.width / 2
+  const centerY = canvas.height / 2
+
+  particles = []
+
+  // 创建 "Happy Birthday" 粒子（灰白色）
+  const happyParticles = createTextParticles(
+    canvas,
+    'Happy Birthday',
+    centerX,
+    centerY - 60,
+    80,
+    '#E8E8E8'
+  )
+
+  // 创建 "W_JK" 粒子（灰蓝色）
+  const nameParticles = createTextParticles(
+    canvas,
+    'W_JK',
+    centerX,
+    centerY + 60,
+    60,
+    '#6B8CAE'
+  )
+
+  particles = [...happyParticles, ...nameParticles]
 }
+
+const animate = (canvas) => {
+  const ctx = canvas.getContext('2d')
+
+  // 初始化开始时间
+  if (!startTime) {
+    startTime = Date.now()
+  }
+
+  const elapsedTime = Date.now() - startTime
+
+  // 2秒后开始聚合
+  if (elapsedTime > 2000 && particles.length > 0 && !particles[0].startGathering) {
+    particles.forEach(particle => particle.startGather())
+  }
+
+  // 清空画布
+  ctx.fillStyle = 'rgba(26, 26, 46, 0.1)'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  // 更新和绘制粒子
+  let allArrived = true
+  particles.forEach(particle => {
+    particle.update()
+    particle.draw(ctx)
+    if (!particle.arrived) allArrived = false
+  })
+
+  // 所有粒子到达后显示祝福语
+  if (allArrived && !showBlessing.value && particles[0]?.startGathering) {
+    showBlessing.value = true
+  }
+
+  animationId = requestAnimationFrame(() => animate(canvas))
+}
+
+const handleResize = () => {
+  const canvas = canvasRef.value
+  if (!canvas) return
+
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+
+  // 重新初始化粒子
+  initParticles(canvas)
+
+  // 重置开始时间
+  startTime = Date.now()
+  showContent.value = false
+}
+
+onMounted(() => {
+  const canvas = canvasRef.value
+  if (!canvas) return
+
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+
+  // 初始化粒子
+  initParticles(canvas)
+
+  // 开始动画
+  animate(canvas)
+
+  // 监听窗口大小变化
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  if (animationId) {
+    cancelAnimationFrame(animationId)
+  }
+  window.removeEventListener('resize', handleResize)
+})
 </script>
 
 <style scoped>
-.birthday-container {
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.birthday-page {
   position: relative;
   width: 100%;
   height: 100vh;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #0a0a0a 100%);
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   overflow: hidden;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
-/* 粒子效果 */
-.particles {
+.particle-canvas {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  z-index: 1;
 }
 
-.particle {
+.main-content {
   position: absolute;
-  background: rgba(138, 43, 226, 0.6);
-  border-radius: 50%;
-  animation: float linear infinite;
-  box-shadow: 0 0 10px rgba(138, 43, 226, 0.8);
-}
-
-@keyframes float {
-  0% {
-    transform: translateY(100vh) rotate(0deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-100vh) rotate(360deg);
-    opacity: 0;
-  }
-}
-
-/* 主内容 */
-.content {
-  position: relative;
-  z-index: 10;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
-  padding: 2rem;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+  pointer-events: none;
 }
 
-/* 标题 */
+.main-content.show {
+  opacity: 0;
+}
+
 .title {
-  font-size: 6rem;
-  font-weight: bold;
+  font-size: 5rem;
+  font-weight: 700;
+  font-family: 'Varela Round', 'HarmonyOS Sans', sans-serif;
+  color: #FFFFFF;
+  text-shadow:
+    0 0 20px rgba(255, 255, 255, 0.8),
+    0 0 40px rgba(255, 255, 255, 0.5),
+    0 0 60px rgba(255, 255, 255, 0.3);
   margin-bottom: 1rem;
-  display: flex;
-  justify-content: center;
-  gap: 0.5rem;
+  letter-spacing: 3px;
 }
 
-.char {
-  display: inline-block;
-  background: linear-gradient(45deg, #00f5ff, #ff00ff, #00f5ff);
-  background-size: 200% 200%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: gradient 3s ease infinite, bounce 1s ease-out;
-  text-shadow: 0 0 30px rgba(0, 245, 255, 0.5);
-  filter: drop-shadow(0 0 20px rgba(255, 0, 255, 0.5));
+.name {
+  font-size: 3.5rem;
+  font-weight: 600;
+  font-family: 'Varela Round', 'HarmonyOS Sans', sans-serif;
+  color: #4A90E2;
+  text-shadow:
+    0 0 20px rgba(74, 144, 226, 0.8),
+    0 0 40px rgba(74, 144, 226, 0.5),
+    0 0 60px rgba(74, 144, 226, 0.3);
+  margin-bottom: 2rem;
+  letter-spacing: 8px;
 }
 
-@keyframes gradient {
+.message {
+  font-size: 1.5rem;
+  font-family: 'HarmonyOS Sans', 'Microsoft YaHei', sans-serif;
+  color: #FFD700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  letter-spacing: 2px;
+  animation: glow 2s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
   0%, 100% {
     background-position: 0% 50%;
   }
@@ -179,241 +368,97 @@ const celebrate = () => {
   }
 }
 
-@keyframes bounce {
+@keyframes glow {
   0%, 100% {
-    transform: translateY(0);
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
   }
   50% {
-    transform: translateY(-20px);
-  }
-}
-
-/* 副标题 */
-.subtitle {
-  font-size: 2rem;
-  margin-bottom: 2rem;
-}
-
-.glow-text {
-  color: #00f5ff;
-  text-shadow:
-    0 0 10px #00f5ff,
-    0 0 20px #00f5ff,
-    0 0 30px #00f5ff,
-    0 0 40px #00f5ff;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-/* 装饰线条 */
-.lines {
-  position: relative;
-  width: 300px;
-  height: 2px;
-  margin: 2rem auto;
-}
-
-.line {
-  position: absolute;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #00f5ff, transparent);
-  animation: scan 2s linear infinite;
-}
-
-.line-1 {
-  width: 100%;
-  left: 0;
-}
-
-.line-2 {
-  width: 100%;
-  left: 0;
-  animation-delay: 1s;
-}
-
-@keyframes scan {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-/* 蛋糕图标 */
-.cake-icon {
-  font-size: 5rem;
-  margin: 2rem 0;
-  animation: rotate 3s linear infinite;
-  filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.8));
-}
-
-@keyframes rotate {
-  0%, 100% {
-    transform: rotate(-10deg) scale(1);
-  }
-  50% {
-    transform: rotate(10deg) scale(1.1);
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 0 30px rgba(255, 215, 0, 0.6);
   }
 }
 
 /* 祝福语 */
-.message {
-  font-size: 1.5rem;
-  color: #fff;
-  margin: 2rem 0;
-  letter-spacing: 2px;
-}
-
-.message-char {
-  display: inline-block;
+.blessing-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin-top: 180px;
+  text-align: center;
+  z-index: 10;
   opacity: 0;
-  animation: fadeIn 0.5s ease-out forwards;
+  transition: opacity 1.5s ease-out;
+  font-size: 1.8rem;
+  font-weight: 500;
+  font-family: 'Varela Round', 'HarmonyOS Sans', 'Microsoft YaHei', sans-serif;
+  color: #FFD700;
+  text-shadow:
+    0 0 10px rgba(255, 215, 0, 0.8),
+    0 0 20px rgba(255, 215, 0, 0.6),
+    0 0 30px rgba(255, 215, 0, 0.4),
+    0 0 40px rgba(255, 215, 0, 0.2);
+  letter-spacing: 2px;
+  animation: blessingGlow 2s ease-in-out infinite;
 }
 
-@keyframes fadeIn {
-  to {
-    opacity: 1;
+.blessing-message.show {
+  opacity: 1;
+}
+
+@keyframes blessingGlow {
+  0%, 100% {
+    text-shadow:
+      0 0 10px rgba(255, 215, 0, 0.8),
+      0 0 20px rgba(255, 215, 0, 0.6),
+      0 0 30px rgba(255, 215, 0, 0.4),
+      0 0 40px rgba(255, 215, 0, 0.2);
+  }
+  50% {
+    text-shadow:
+      0 0 15px rgba(255, 215, 0, 1),
+      0 0 30px rgba(255, 215, 0, 0.8),
+      0 0 45px rgba(255, 215, 0, 0.6),
+      0 0 60px rgba(255, 215, 0, 0.4);
   }
 }
-
-/* 按钮 */
-.celebrate-btn {
-  position: relative;
-  padding: 1rem 3rem;
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: #fff;
-  background: transparent;
-  border: 2px solid #00f5ff;
-  border-radius: 50px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: all 0.3s ease;
-  margin-top: 2rem;
-}
-
-.celebrate-btn:hover {
-  transform: scale(1.05);
-  box-shadow:
-    0 0 20px #00f5ff,
-    0 0 40px #00f5ff,
-    inset 0 0 20px rgba(0, 245, 255, 0.2);
-}
-
-.btn-text {
-  position: relative;
-  z-index: 2;
-}
-
-.btn-glow {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0, 245, 255, 0.5), transparent);
-  transition: left 0.5s ease;
-}
-
-.celebrate-btn:hover .btn-glow {
-  left: 100%;
-}
-
-/* 烟花效果 */
-.fireworks {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.firework {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  animation: explode 1s ease-out forwards;
-}
-
-@keyframes explode {
-  0% {
-    box-shadow:
-      0 0 0 0 #ff00ff,
-      0 0 0 0 #00f5ff,
-      0 0 0 0 #ffff00,
-      0 0 0 0 #00ff00;
-    opacity: 1;
-  }
-  100% {
-    box-shadow:
-      0 -100px 20px 10px transparent,
-      100px 0 20px 10px transparent,
-      0 100px 20px 10px transparent,
-      -100px 0 20px 10px transparent,
-      70px -70px 20px 10px transparent,
-      70px 70px 20px 10px transparent,
-      -70px 70px 20px 10px transparent,
-      -70px -70px 20px 10px transparent;
-    opacity: 0;
-  }
-}
-
-/* 扫描线效果 */
-.scanline {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(0, 245, 255, 0.05) 50%,
-    transparent 100%
-  );
-  animation: scanline 8s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes scanline {
-  0% {
-    transform: translateY(-100%);
-  }
-  100% {
-    transform: translateY(100%);
-  }
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
   .title {
     font-size: 3rem;
   }
 
-  .subtitle {
-    font-size: 1.5rem;
+  .name {
+    font-size: 2.5rem;
+    letter-spacing: 4px;
   }
 
-  .cake-icon {
-    font-size: 3rem;
+  .message {
+    font-size: 1.2rem;
+  }
+
+  .blessing-message {
+    font-size: 1.3rem;
+    margin-top: 150px;
+  }
+}
+
+@media (max-width: 480px) {
+  .title {
+    font-size: 2.5rem;
+  }
+
+  .name {
+    font-size: 2rem;
+    letter-spacing: 3px;
   }
 
   .message {
     font-size: 1rem;
   }
 
-  .celebrate-btn {
-    padding: 0.8rem 2rem;
-    font-size: 1rem;
+  .blessing-message {
+    font-size: 1.1rem;
+    margin-top: 130px;
+    padding: 0 1rem;
   }
 }
 </style>
