@@ -162,7 +162,8 @@ const createTextParticles = (canvas, text, x, y, fontSize, color) => {
   const centerY = canvas.height / 2
 
   const particleArray = []
-  const gap = 3 // 粒子间隔
+  // 根据屏幕大小调整粒子间隔
+  const gap = canvas.width < 768 ? 4 : 3
 
   for (let py = 0; py < tempCanvas.height; py += gap) {
     for (let px = 0; px < tempCanvas.width; px += gap) {
@@ -187,22 +188,24 @@ const initParticles = (canvas) => {
   particles = []
 
   // 创建 "Happy Birthday" 粒子（灰白色）
+  const fontSize1 = canvas.width < 768 ? 50 : 80
   const happyParticles = createTextParticles(
     canvas,
     'Happy Birthday',
     centerX,
-    centerY - 60,
-    80,
+    centerY - (canvas.width < 768 ? 40 : 60),
+    fontSize1,
     '#E8E8E8'
   )
 
   // 创建 "W_JK" 粒子（灰蓝色）
+  const fontSize2 = canvas.width < 768 ? 40 : 60
   const nameParticles = createTextParticles(
     canvas,
     'W_JK',
     centerX,
-    centerY + 60,
-    60,
+    centerY + (canvas.width < 768 ? 40 : 60),
+    fontSize2,
     '#6B8CAE'
   )
 
@@ -399,6 +402,8 @@ onUnmounted(() => {
     0 0 40px rgba(255, 215, 0, 0.2);
   letter-spacing: 2px;
   animation: blessingGlow 2s ease-in-out infinite;
+  padding: 0 2rem;
+  max-width: 90%;
 }
 
 .blessing-message.show {
@@ -436,8 +441,9 @@ onUnmounted(() => {
   }
 
   .blessing-message {
-    font-size: 1.3rem;
-    margin-top: 150px;
+    font-size: 1.4rem;
+    margin-top: 120px;
+    letter-spacing: 1px;
   }
 }
 
@@ -457,8 +463,15 @@ onUnmounted(() => {
 
   .blessing-message {
     font-size: 1.1rem;
-    margin-top: 130px;
-    padding: 0 1rem;
+    margin-top: 100px;
+    letter-spacing: 0.5px;
+  }
+}
+
+@media (max-width: 375px) {
+  .blessing-message {
+    font-size: 1rem;
+    margin-top: 90px;
   }
 }
 </style>
